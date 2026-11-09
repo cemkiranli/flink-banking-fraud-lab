@@ -1,0 +1,138 @@
+name: flink-banking-fraud-lab
+
+x-flink-common: &flink-common
+  build: .
+  image: flink-banking-fraud-lab:local
+  depends_on:
+    redpanda:
+      condition: service_healthy
+  environment:
+    KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+    FLINK_PROPERTIES: |
+      jobmanager.rpc.address: jobmanager
+      rest.address: jobmanager
+      parallelism.default: 2
+      taskmanager.numberOfTaskSlots: 4
+      state.backend.type: hashmap
+      execution.checkpointing.storage: filesystem
+      execution.checkpointing.dir: file:///opt/flink/state/checkpoints
+      execution.checkpointing.savepoint-dir: file:///opt/flink/state/savepoints
+      restart-strategy.type: fixed-delay
+      restart-strategy.fixed-delay.attempts: 3
+      restart-strategy.fixed-delay.delay: 5 s
+  volumes:
+    - ./docker/flink-state:/opt/flink/state
+
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.18
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=768M
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+
+  topic-init:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.18
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-ec"]
+    command:
+      - |
+        for topic in bank-transactions fraud-rules fraud-alerts risk-window-summaries invalid-events duplicate-events late-events; do
+          rpk topic create "$${topic}" --brokers redpanda:9092 --partitions 3 --replicas 1 || true
+        done
+
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.8.4
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "8080:8080"
+
+  jobmanager:
+    <<: *flink-common
+    command: jobmanager
+    ports:
+      - "8081:8081"
+
+  taskmanager:
+    <<: *flink-common
+    command: taskmanager
+    depends_on:
+      jobmanager:
+        condition: service_started
+      redpanda:
+        condition: service_healthy
+
+  job-submitter:
+    <<: *flink-common
+    command:
+      - /bin/bash
+      - -ec
+      - |
+        until curl -sf http://jobmanager:8081/overview >/dev/null; do sleep 2; done
+        if curl -sf http://jobmanager:8081/jobs/overview \
+          | grep -q '"name":"Banking Fraud Detection - Event Time Lab".*"state":"RUNNING"'; then
+          echo "Fraud Detection job is already running; skipping duplicate submission."
+          exit 0
+        fi
+        /opt/flink/bin/flink run -d \
+          -c com.bankstream.fraud.application.FraudDetectionJob \
+          /opt/flink/usrlib/flink-banking-fraud-lab.jar
+    depends_on:
+      topic-init:
+        condition: service_completed_successfully
+      jobmanager:
+        condition: service_started
+      taskmanager:
+        condition: service_started
+    restart: "no"
+
+  scenario-producer:
+    image: flink-banking-fraud-lab:local
+    profiles: ["tools"]
+    entrypoint:
+      - java
+      - -cp
+      - /opt/flink/usrlib/flink-banking-fraud-lab.jar
+      - com.bankstream.fraud.generator.ScenarioProducer
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+    depends_on:
+      topic-init:
+        condition: service_completed_successfully
+
+  topic-reader:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.18
+    profiles: ["tools"]
+    entrypoint: ["/bin/bash", "-ec"]
+    command:
+      - >-
+        rpk topic consume fraud-alerts risk-window-summaries invalid-events
+        duplicate-events late-events --brokers redpanda:9092 --offset start
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+volumes:
+  redpanda-data:

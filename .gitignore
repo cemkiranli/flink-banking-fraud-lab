@@ -1,0 +1,6 @@
+target/
+.idea/
+docker/flink-state/checkpoints/*
+docker/flink-state/savepoints/*
+!docker/flink-state/checkpoints/.gitkeep
+!docker/flink-state/savepoints/.gitkeep

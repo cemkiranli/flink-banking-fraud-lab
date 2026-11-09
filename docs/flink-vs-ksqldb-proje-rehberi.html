@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Apache Flink ve ksqlDB — Banking Fraud Lab Proje Rehberi</title>
+  <style>
+    :root {
+      --ink: #172033;
+      --muted: #566179;
+      --line: #d9dfeb;
+      --paper: #ffffff;
+      --soft: #f4f7fb;
+      --flink: #dd2a7b;
+      --flink-dark: #8f174d;
+      --ksql: #2563eb;
+      --ksql-dark: #173e91;
+      --green: #0f8a60;
+      --amber: #a65f00;
+      --red: #bd2c2c;
+    }
+
+    * { box-sizing: border-box; }
+
+    @page {
+      size: A4;
+      margin: 16mm 15mm 17mm;
+    }
+
+    html { font-size: 10.2pt; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      line-height: 1.46;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    h1, h2, h3, h4 { margin: 0 0 8px; line-height: 1.18; }
+    h1 { font-size: 29pt; letter-spacing: -0.7px; }
+    h2 { font-size: 19pt; color: #15233f; border-bottom: 2px solid var(--line); padding-bottom: 6px; }
+    h3 { font-size: 13.2pt; margin-top: 15px; color: #263654; }
+    h4 { font-size: 10.8pt; margin-top: 10px; }
+    p { margin: 0 0 9px; }
+    ul, ol { margin: 5px 0 10px 20px; padding: 0; }
+    li { margin: 3px 0; }
+    a { color: var(--ksql-dark); text-decoration: none; }
+    strong { color: #121a2b; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 8.8pt;
+      background: #edf1f7;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    pre {
+      margin: 8px 0 12px;
+      padding: 11px 12px;
+      border-radius: 7px;
+      background: #101827;
+      color: #eef4ff;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font: 8.35pt/1.42 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      page-break-inside: avoid;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 9px 0 13px;
+      font-size: 8.8pt;
+      page-break-inside: auto;
+    }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+    th {
+      background: #e9eef7;
+      color: #17233b;
+      font-weight: 700;
+      text-align: left;
+      padding: 7px;
+      border: 1px solid #cbd4e3;
+    }
+    td {
+      vertical-align: top;
+      padding: 7px;
+      border: 1px solid #d7deea;
+    }
+    tbody tr:nth-child(even) td { background: #f8fafd; }
+
+    .page { page-break-after: always; }
+    .page:last-child { page-break-after: auto; }
+    .avoid { page-break-inside: avoid; }
+    .muted { color: var(--muted); }
+    .small { font-size: 8.4pt; }
+    .eyebrow {
+      color: var(--flink-dark);
+      font-size: 9pt;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .cover {
+      min-height: 258mm;
+      padding: 14mm 10mm 8mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background:
+        radial-gradient(circle at 92% 8%, rgba(37,99,235,.17), transparent 29%),
+        radial-gradient(circle at 9% 80%, rgba(221,42,123,.16), transparent 32%),
+        linear-gradient(145deg, #fbfcff, #eef3fb);
+      border: 1px solid #dce3ef;
+      border-radius: 14px;
+    }
+    .cover h1 span:first-child { color: var(--flink); }
+    .cover h1 span:last-child { color: var(--ksql); }
+    .cover .subtitle {
+      max-width: 142mm;
+      margin-top: 16px;
+      font-size: 15pt;
+      line-height: 1.38;
+      color: #35435e;
+    }
+    .cover-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 22px;
+    }
+    .cover-card {
+      padding: 12px;
+      border-radius: 9px;
+      background: rgba(255,255,255,.78);
+      border: 1px solid rgba(203,212,227,.9);
+    }
+    .cover-card.flink { border-top: 5px solid var(--flink); }
+    .cover-card.ksql { border-top: 5px solid var(--ksql); }
+    .cover-card b { display: block; font-size: 12pt; margin-bottom: 4px; }
+    .cover-meta { font-size: 9pt; color: #59677e; }
+
+    .summary {
+      background: linear-gradient(90deg, #fdf1f7, #eef4ff);
+      border-left: 5px solid var(--flink);
+      border-radius: 7px;
+      padding: 12px 14px;
+      margin: 11px 0 14px;
+      page-break-inside: avoid;
+    }
+    .note, .warning, .success {
+      padding: 10px 12px;
+      margin: 10px 0 12px;
+      border-radius: 6px;
+      page-break-inside: avoid;
+    }
+    .note { background: #eef5ff; border-left: 4px solid var(--ksql); }
+    .warning { background: #fff6e7; border-left: 4px solid var(--amber); }
+    .success { background: #eaf8f2; border-left: 4px solid var(--green); }
+
+    .toc {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 20px;
+      margin-top: 14px;
+    }
+    .toc div {
+      padding: 8px 10px;
+      background: var(--soft);
+      border-left: 3px solid #9aa8bd;
+      border-radius: 3px;
+    }
+    .toc b { display: inline-block; min-width: 23px; color: var(--flink-dark); }
+
+    .flow {
+      display: flex;
+      align-items: stretch;
+      gap: 5px;
+      margin: 13px 0;
+      page-break-inside: avoid;
+    }
+    .flow .box {
+      flex: 1;
+      min-width: 0;
+      padding: 9px 6px;
+      border-radius: 6px;
+      border: 1px solid #cbd4e3;
+      background: #f8fafd;
+      text-align: center;
+      font-size: 8pt;
+      font-weight: 650;
+    }
+    .flow .box.source { border-top: 4px solid #e11d48; }
+    .flow .box.state { border-top: 4px solid #7c3aed; }
+    .flow .box.window { border-top: 4px solid #f59e0b; }
+    .flow .box.sink { border-top: 4px solid #059669; }
+    .flow .arrow { align-self: center; color: #718096; font-weight: 900; }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 11px 12px;
+      background: #fff;
+      page-break-inside: avoid;
+    }
+    .card.flink { border-top: 4px solid var(--flink); }
+    .card.ksql { border-top: 4px solid var(--ksql); }
+    .card h3 { margin-top: 0; }
+
+    .verdict {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 12px 0;
+    }
+    .verdict > div { padding: 12px; border-radius: 7px; }
+    .verdict .choose-flink { background: #fcedf5; border: 1px solid #f2bdd6; }
+    .verdict .choose-ksql { background: #edf3ff; border: 1px solid #bfd0fb; }
+
+    .refs li { margin-bottom: 7px; overflow-wrap: anywhere; }
+    .footer-note { margin-top: 15px; padding-top: 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 8pt; }
+  </style>
+</head>
+<body>
+
+<section class="page cover">
+  <div>
+    <div class="eyebrow">Teknik proje rehberi · 8 Kasım 2026</div>
+    <h1><span>Apache Flink</span> ve <span>ksqlDB</span></h1>
+    <p class="subtitle">Banking Fraud Lab’de ne yaptık, Flink’i neden ve nasıl kullandık, aynı problem ksqlDB ile nasıl ele alınırdı?</p>
+
+    <div class="cover-grid">
+      <div class="cover-card flink">
+        <b>Bu projedeki yaklaşım</b>
+        Java DataStream API, keyed/broadcast state, event time, watermark, window, side output, checkpoint ve transactional Kafka sink.
+      </div>
+      <div class="cover-card ksql">
+        <b>Karşılaştırılan yaklaşım</b>
+        Kafka üzerinde SQL ile stream/table tanımları, persistent query, windowed aggregation ve materialized view.
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="summary">
+      <strong>Kısa sonuç:</strong> Bu laboratuvarın dinamik rule broadcast’i, özel dedup TTL’i, typed side output’ları ve ayrıntılı event-time kontrolü Flink’in güçlü olduğu alandır. ksqlDB; Kafka merkezli, SQL ile ifade edilebilen filtreleme, dönüşüm, join ve aggregation işlerinde daha az kodla daha hızlı sonuç verir.
+    </div>
+    <p class="cover-meta">Proje: <strong>flink-banking-fraud-lab</strong><br>Çalışma ortamı: Flink 1.20.5 · Java 17 · Redpanda/Kafka · Docker Compose</p>
+  </div>
+</section>
+
+<section class="page">
+  <h2>İçindekiler ve yönetici özeti</h2>
+
+  <div class="toc">
+    <div><b>1</b> Problem ve hedef</div>
+    <div><b>2</b> Çalışan mimari</div>
+    <div><b>3</b> Flink özellikleri</div>
+    <div><b>4</b> Veri yolculuğu</div>
+    <div><b>5</b> Fault tolerance</div>
+    <div><b>6</b> Canlı test bulgusu</div>
+    <div><b>7</b> ksqlDB nedir?</div>
+    <div><b>8</b> Ayrıntılı karşılaştırma</div>
+    <div><b>9</b> ksqlDB ile taslak çözüm</div>
+    <div><b>10</b> Seçim rehberi</div>
+  </div>
+
+  <h3>Yönetici özeti</h3>
+  <p>Bu proje, Kafka uyumlu Redpanda’ya yazılan banka işlemlerini sürekli okuyup dolandırıcılık sinyalleri üreten stateful bir Flink job’ıdır. Job yalnızca mesaj taşımaz; her transaction kimliğini 24 saat hatırlar, kuralları canlı olarak broadcast state’te günceller, işlem zamanına göre pencereler oluşturur ve sonuçları checkpoint ile koordineli Kafka transaction’larına yazar.</p>
+
+  <div class="two-col">
+    <div class="card flink">
+      <h3>Flink’in kazandırdığı</h3>
+      <ul>
+        <li>Keyed ve broadcast state üzerinde doğrudan kontrol</li>
+        <li>Watermark, idleness, allowed lateness ve side output</li>
+        <li>Özel Java iş mantığı ve farklı rule stratejileri</li>
+        <li>Checkpoint/savepoint tabanlı state recovery</li>
+        <li>Kafka dışında başka source/sink’lere açılabilme</li>
+      </ul>
+    </div>
+    <div class="card ksql">
+      <h3>ksqlDB’nin kazandırdığı</h3>
+      <ul>
+        <li>Java job yazmadan SQL ile sürekli sorgular</li>
+        <li>Kafka STREAM/TABLE modeli ve kolay aggregation/join</li>
+        <li>Materialized view üzerinde pull query</li>
+        <li>Daha düşük uygulama kodu ve hızlı analitik geliştirme</li>
+        <li>Kafka-native operasyon modeli</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Terminoloji:</strong> Kullanıcının “ksql” dediği ürünün güncel adı <strong>ksqlDB</strong>’dir. ksqlDB, Kafka Streams üzerinde çalışan bir SQL stream-processing katmanıdır; Kafka’nın yerine geçmez.
+  </div>
+</section>
+
+<section class="page">
+  <h2>1. Problem: gerçek zamanlı banka fraud işleme</h2>
+
+  <p>Girdi, sonsuz bir transaction akışıdır. Her kayıt; transaction ve hesap kimliği, minor-unit tutar, para birimi, ülke, kanal, durum ve olay zamanı taşır. Sistemden beklenen, kayıtları yalnızca sırayla tüketmek değil; bozuk veriyi ayırmak, tekrarları engellemek, güncellenebilir kuralları uygulamak ve zaman pencerelerinde davranış özeti çıkarmaktır.</p>
+
+  <h3>Fonksiyonel hedefler</h3>
+  <table>
+    <thead><tr><th>İhtiyaç</th><th>Projede yapılan</th><th>Üretilen topic</th></tr></thead>
+    <tbody>
+      <tr><td>Schema/business validation</td><td>JSON parse ve zorunlu alan kontrolleri</td><td><code>invalid-events</code></td></tr>
+      <tr><td>Idempotency</td><td><code>transactionId</code> bazlı 24 saatlik keyed state</td><td><code>duplicate-events</code></td></tr>
+      <tr><td>Canlı rule güncelleme</td><td><code>fraud-rules</code> → broadcast state; yüksek version kazanır</td><td>Kural state’i</td></tr>
+      <tr><td>Tekil fraud kararları</td><td>HIGH_AMOUNT ve COUNTRY_MISMATCH stratejileri</td><td><code>fraud-alerts</code></td></tr>
+      <tr><td>Dakikalık hesap özeti</td><td>1 dakikalık tumbling event-time window</td><td><code>risk-window-summaries</code></td></tr>
+      <tr><td>Velocity kontrolü</td><td>60 saniye genişlik / 10 saniye slide; eşik varsayılan 5</td><td><code>fraud-alerts</code></td></tr>
+      <tr><td>Çok geç kayıt audit’i</td><td>30 saniyelik allowed lateness sonrası side output</td><td><code>late-events</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Teknik hedefler</h3>
+  <ul>
+    <li>Event’in işlendiği makine saatine değil, bankacılık olayının gerçekleşme zamanına göre sonuç üretmek.</li>
+    <li>Failure sonrası Kafka offset’i ile operator state’ini aynı tutarlı noktadan geri yüklemek.</li>
+    <li>Downstream consumer’a yarım Kafka transaction göstermemek.</li>
+    <li>Operator UID’lerini sabit tutarak stateful upgrade/savepoint yolunu açık bırakmak.</li>
+    <li>Invalid, duplicate ve late kayıtları kaybetmeden ayrı audit akışlarına yönlendirmek.</li>
+  </ul>
+
+  <div class="warning">
+    <strong>Para modeli:</strong> Tutarlar <code>double</code> yerine <code>long amountMinor</code> olarak tutulur. Örneğin 12500, TRY için 125,00 TL’yi ifade eder. Böylece floating-point yuvarlama hataları rule sınırını bozmaz.
+  </div>
+</section>
+
+<section class="page">
+  <h2>2. Çalışan mimari ve Docker Compose rolleri</h2>
+
+  <div class="flow">
+    <div class="box source">Scenario Producer<br>bank-transactions<br>fraud-rules</div>
+    <div class="arrow">→</div>
+    <div class="box source">Redpanda<br>Kafka API</div>
+    <div class="arrow">→</div>
+    <div class="box state">Flink<br>parse · state · rules</div>
+    <div class="arrow">→</div>
+    <div class="box window">Event-time<br>windows</div>
+    <div class="arrow">→</div>
+    <div class="box sink">Kafka sinks<br>alert · audit · summary</div>
+  </div>
+
+  <table>
+    <thead><tr><th>Compose servisi</th><th>Rolü</th><th>Yaşam döngüsü</th></tr></thead>
+    <tbody>
+      <tr><td><code>redpanda</code></td><td>Kafka uyumlu broker; input, rule ve output topic’lerini barındırır</td><td>Sürekli</td></tr>
+      <tr><td><code>redpanda-console</code></td><td>Topic, partition ve mesajları web arayüzünde gösterir</td><td>Sürekli, port 8080</td></tr>
+      <tr><td><code>topic-init</code></td><td>Yedi topic’i üç partition ile oluşturur</td><td>Tek seferlik</td></tr>
+      <tr><td><code>jobmanager</code></td><td>Job graph, scheduling, checkpoint koordinasyonu ve Flink REST/UI</td><td>Sürekli, port 8081</td></tr>
+      <tr><td><code>taskmanager</code></td><td>Operator subtask’larını çalıştıran worker; dört slot</td><td>Sürekli</td></tr>
+      <tr><td><code>job-submitter</code></td><td>JAR’ı JobManager’a gönderir; başarıdan sonra exit 0</td><td>Tek seferlik</td></tr>
+      <tr><td><code>scenario-producer</code></td><td>Normal, duplicate, invalid, burst, late ve rule-update verisi üretir</td><td>İsteğe bağlı araç</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Flink UI’da görülen fiziksel graph</h3>
+  <p>Flink, ardışık ve uyumlu operator’leri <em>operator chaining</em> ile aynı vertex içinde çalıştırır. Canlı çalıştırmada yedi vertex, her vertex için parallelism 2 ve toplam 14 logical subtask görüldü. Slot sharing sayesinde bunlar 14 ayrı container veya 14 ayrı slot değildir.</p>
+
+  <ol>
+    <li>Kafka transactions → parse/validate → watermark → invalid sink</li>
+    <li>Kafka fraud rules → rule parse</li>
+    <li>24h idempotency filter → duplicate sink</li>
+    <li>Broadcast-state dynamic rule evaluation</li>
+    <li>One-minute account risk window → summary/late sinks</li>
+    <li>Sliding-window velocity detector</li>
+    <li>Exactly-once fraud alert writer/committer</li>
+  </ol>
+
+  <div class="note"><strong>HASH / BROADCAST / FORWARD:</strong> <code>keyBy</code> bağlantıları HASH shuffle üretir; rule stream’i bütün evaluator subtasks’a BROADCAST edilir; aynı paralel kanal üzerinden devam eden akış FORWARD görünür.</div>
+</section>
+
+<section class="page">
+  <h2>3. Projede Flink’i nasıl kullandık?</h2>
+
+  <h3>3.1 Kaynak, parse ve typed side output</h3>
+  <p><code>bank-transactions</code> önce ham String olarak okunur. JSON → <code>TransactionEvent</code> dönüşümü ve validation tamamlanınca valid event ana stream’e, hatalı event <code>OutputTag&lt;RejectedEvent&gt;</code> üzerinden invalid side output’a gider. Böylece bozuk bir JSON bütün job’ı restart döngüsüne sokmaz.</p>
+
+  <h3>3.2 Event time, watermark ve idleness</h3>
+  <p>Timestamp doğrudan <code>eventTimeEpochMillis</code> alanından atanır. Bounded-out-of-orderness varsayılan 5 saniyedir. Watermark kabaca “gördüğüm en büyük event zamanı − 5 saniye” ilerler. Boş Kafka partition’ın ilerlemeyi durdurmaması için transaction stream’inde 5 saniyelik idleness bulunur.</p>
+
+  <h3>3.3 Keyed state ile deduplication</h3>
+  <p>Stream <code>transactionId</code> ile key edilir. Her key için <code>ValueState&lt;Boolean&gt;</code> tutulur. İlk event state’i yazar; sonraki aynı ID ana akıştan çıkar ve duplicate side output’a gider. 24 saatlik TTL processing time tabanlıdır; bu nedenle “event time’a göre tam 24 saat dedup” anlamına gelmez.</p>
+
+  <h3>3.4 Broadcast state ile dinamik kurallar</h3>
+  <p><code>fraud-rules</code> stream’i <code>MapStateDescriptor&lt;String, RuleConfig&gt;</code> ile broadcast edilir. Transaction stream’i account ID ile keyed durumdayken iki stream <code>KeyedBroadcastProcessFunction</code> üzerinden birleşir. Rule update yalnız daha yüksek version ise state’e yazılır. Transaction tarafı state’i read-only görür ve bütün aktif stratejileri değerlendirir.</p>
+
+  <h3>3.5 İki farklı event-time window</h3>
+  <table>
+    <thead><tr><th>Window</th><th>Amaç</th><th>State/çıktı davranışı</th></tr></thead>
+    <tbody>
+      <tr><td>1 dakika tumbling</td><td>Account bazlı count, declined count, total ve max amount</td><td>Çakışmaz; incremental accumulator + pencere metadata’sı</td></tr>
+      <tr><td>60 sn / 10 sn sliding</td><td>Kısa sürede çok sayıda işlem (velocity)</td><td>Bir event altı pencereye girebilir; eşik aşılırsa alert</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.6 Side output’ların iş değeri</h3>
+  <p>Invalid, duplicate, too-late ve rule alert akışları ana event tipini kirletmeden ayrı, typed kanallara çıkar. Bu yapı audit, replay ve operasyonel metrik için değerlidir. ksqlDB karşılaştırmasında bu nokta özellikle önemlidir: ksqlDB’de çoğunlukla her ayrım için ayrı persistent query kurulur.</p>
+</section>
+
+<section class="page">
+  <h2>4. Bir transaction’ın uçtan uca yolculuğu</h2>
+
+  <pre>{
+  "transactionId": "tx-123",
+  "accountId": "acc-102",
+  "amountMinor": 8000,
+  "currency": "TRY",
+  "country": "US",
+  "channel": "MOBILE",
+  "status": "APPROVED",
+  "eventTimeEpochMillis": 1794126986962
+}</pre>
+
+  <ol>
+    <li>Producer mesajı <code>bank-transactions</code> topic’ine account ID key’i ile yazar.</li>
+    <li>KafkaSource mesajı okur; offset checkpoint mekanizmasına katılır.</li>
+    <li>JSON parse edilir ve zorunlu alanlar validate edilir.</li>
+    <li>Event timestamp atanır; record watermark üretimine katılır.</li>
+    <li><code>keyBy(transactionId)</code> network shuffle yapar; dedup state kontrol edilir.</li>
+    <li>İlk kez görülüyorsa <code>seen=true</code> yazılır ve event devam eder.</li>
+    <li><code>keyBy(accountId)</code> sonrası event, rule broadcast stream’i ile bağlanır.</li>
+    <li>Beklenen ülke TR iken event ülkesi US olduğundan COUNTRY_MISMATCH alert’i oluşur.</li>
+    <li>Alert deterministik doğal anahtardan üretilen ID ile fraud-alert side output’una gider.</li>
+    <li>Transaction risk ve velocity window’larına da aktarılır.</li>
+    <li>Kafka sink mesajı açık transaction’a yazar; checkpoint başarılı olunca commit eder.</li>
+    <li><code>read_committed</code> consumer yalnız commit edilmiş alert’i görür.</li>
+  </ol>
+
+  <div class="success">
+    <strong>Canlı testte doğrulananlar:</strong> COUNTRY_MISMATCH alert’i, boş account ID nedeniyle invalid-event ve ikinci kez gelen transaction nedeniyle duplicate-event üretildi. Checkpoint sayısı 30/30 başarılıydı; state yaklaşık 33 KB’den 39 KB’ye büyüdü.
+  </div>
+
+  <h3>Rule alert ID neden deterministik?</h3>
+  <p>ID; <code>ruleId + ruleVersion + transactionId</code> doğal anahtarından üretilir. Failure/replay sonrasında aynı mantıksal alert yeniden hesaplanırsa aynı ID çıkar. Bu, downstream idempotent upsert veya dedup tasarımını kolaylaştırır.</p>
+</section>
+
+<section class="page">
+  <h2>5. Checkpoint, recovery ve exactly-once</h2>
+
+  <p>Job her 10 saniyede bir exactly-once checkpoint başlatır. Aynı checkpoint barrier’ı aşağıdaki parçaları tutarlı bir snapshot’ta birleştirir:</p>
+  <ul>
+    <li>Kafka source offset’leri</li>
+    <li>Dedup keyed state</li>
+    <li>Broadcast rule state</li>
+    <li>Risk ve velocity window accumulator state’i</li>
+    <li>Kafka sink transaction/committer durumu</li>
+  </ul>
+
+  <div class="flow">
+    <div class="box source">Replayable<br>Kafka source</div>
+    <div class="arrow">→</div>
+    <div class="box state">Checkpoint barrier<br>operator state</div>
+    <div class="arrow">→</div>
+    <div class="box sink">Kafka transaction<br>commit on checkpoint</div>
+  </div>
+
+  <h3>Failure olduğunda</h3>
+  <ol>
+    <li>JobManager son başarılı checkpoint’i seçer.</li>
+    <li>Keyed/broadcast/window state geri yüklenir.</li>
+    <li>Kafka source, checkpoint’te kayıtlı offset’ten replay eder.</li>
+    <li>Tamamlanmamış sink transaction abort/fence edilir.</li>
+    <li>Yeni output, sonraki başarılı checkpoint ile görünür olur.</li>
+  </ol>
+
+  <div class="note">
+    <strong>Exactly-once’ın doğru yorumu:</strong> Java kodunun fiziksel olarak yalnız bir kez çalışması değildir. Failure sonrası event yeniden işlenebilir; amaç, yönetilen state ve transactional/idempotent sink sonucunun gözlemlenebilir biçimde bir kez etkilenmesidir.
+  </div>
+
+  <h3>Lab ile production arasındaki fark</h3>
+  <table>
+    <thead><tr><th>Lab</th><th>Production önerisi</th></tr></thead>
+    <tbody>
+      <tr><td>Tek Redpanda broker</td><td>Çoğaltılmış Kafka cluster, TLS/SASL ve ACL</td></tr>
+      <tr><td>Tek JobManager/TaskManager</td><td>HA JobManager ve kapasiteye göre çoklu TaskManager</td></tr>
+      <tr><td>HashMap state backend</td><td>State boyutu/latency testine göre RocksDB/ForSt</td></tr>
+      <tr><td>Yerel filesystem checkpoint</td><td>S3/HDFS gibi dayanıklı shared storage</td></tr>
+      <tr><td>JSON</td><td>Schema Registry + Avro/Protobuf ve compatibility politikası</td></tr>
+      <tr><td>Elle UI kontrolü</td><td>Prometheus/Grafana; lag, watermark, checkpoint ve backpressure alarmı</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="page">
+  <h2>6. Canlı testte yakalanan watermark problemi</h2>
+
+  <p>Transaction source’unda watermark ve idleness doğru tanımlı olsa da rule source’u <code>WatermarkStrategy.noWatermarks()</code> kullanıyor. İki-input dynamic rule operator’ünde output watermark, aktif input watermark’larının minimumuna göre ilerlediği için rule tarafı tüm downstream event-time window’larını bloke etti.</p>
+
+  <div class="warning">
+    <strong>Ölçülen metrik:</strong><br>
+    Transaction input watermark: <code>1794126993095</code><br>
+    Rule input watermark: <code>-9223372036854775808</code> (<code>Long.MIN_VALUE</code>)<br>
+    Dynamic evaluator output watermark: <code>-9223372036854775808</code>
+  </div>
+
+  <p>Sonuç olarak immediate yollar çalıştı; COUNTRY_MISMATCH, invalid ve duplicate topic’lerinde kayıt görüldü. Ancak aşağıdaki event-time sonuçları fire etmedi:</p>
+  <ul>
+    <li>Bir dakikalık risk summary</li>
+    <li>Sliding-window velocity alert</li>
+    <li>Risk window too-late side output</li>
+  </ul>
+
+  <h3>Önerilen düzeltme yönü</h3>
+  <p>Rule stream’i uzun süre veri üretmeyen bir control stream olduğundan idleness ile işaretlenmelidir. Kavramsal değişiklik:</p>
+
+  <pre>WatermarkStrategy.&lt;String&gt;noWatermarks()
+    .withIdleness(Duration.ofSeconds(5))</pre>
+
+  <p>Bu yaklaşım, rule input sessizken onu watermark hesabında idle kabul eder ve transaction watermark’ının downstream’e geçmesine izin verir. Düzeltme; unit/integration test, Flink UI’daki input/output watermark metrikleri ve burst/late senaryolarıyla doğrulanmalıdır.</p>
+
+  <div class="note"><strong>Ders:</strong> Tek bir source’un watermark’ının doğru ilerlemesi yeterli değildir. Join/connect gibi çok-input’lu operator’lerde en yavaş aktif input tüm event-time zincirini belirleyebilir. UI’daki <code>currentInput1Watermark</code>, <code>currentInput2Watermark</code> ve <code>currentOutputWatermark</code> birlikte izlenmelidir.</div>
+</section>
+
+<section class="page">
+  <h2>7. ksqlDB nedir ve çalışma modeli nasıldır?</h2>
+
+  <p>ksqlDB, Kafka topic’lerinden stream-processing uygulamaları üretmek için SQL kullanan ve Kafka Streams üzerinde çalışan bir platformdur. Kullanıcı Java ile operator graph yazmak yerine STREAM/TABLE şemaları ve sürekli SQL sorguları tanımlar. ksqlDB bu sorguları fiziksel Kafka Streams topolojilerine dönüştürür.</p>
+
+  <h3>Temel kavramlar</h3>
+  <table>
+    <thead><tr><th>Kavram</th><th>Anlamı</th></tr></thead>
+    <tbody>
+      <tr><td>STREAM</td><td>Değişmez event dizisi; tipik olarak Kafka topic’inin schema’lı görünümü</td></tr>
+      <tr><td>TABLE</td><td>Key başına güncel değer/changelog semantiği; materialized state</td></tr>
+      <tr><td>Persistent query</td><td><code>CREATE STREAM/TABLE AS SELECT</code>; sürekli çalışır ve output topic üretir</td></tr>
+      <tr><td>Push query</td><td>Uzun yaşayan bağlantıyla değişen sonuçları istemciye iter; sonucu topic’e kalıcı yazmaz</td></tr>
+      <tr><td>Pull query</td><td>Materialized view’ın mevcut durumunu request/response şeklinde okur</td></tr>
+      <tr><td>Window + grace</td><td>Key bazlı zaman penceresi ve out-of-order kayıt için kabul süresi</td></tr>
+    </tbody>
+  </table>
+
+  <h3>ksqlDB uygulama yaşam döngüsü</h3>
+  <ol>
+    <li>Kafka topic, <code>CREATE STREAM</code> veya <code>CREATE TABLE</code> ile kaydedilir.</li>
+    <li>İş mantığı SQL ile tanımlanır.</li>
+    <li>ksqlDB sorguyu parse eder ve logical/physical plan üretir.</li>
+    <li>Kafka Streams topolojisi oluşturulur ve ksqlDB server’larında çalışır.</li>
+    <li>State store’lar ve internal/repartition/changelog topic’leri Kafka Streams tarafından yönetilir.</li>
+  </ol>
+
+  <h3>Processing guarantee</h3>
+  <p>ksqlDB’de varsayılan garanti at-least-once’dur. Exactly-once için <code>processing.guarantee="exactly_once_v2"</code> ayarlanmalıdır. Uçtan uca sonuç yine producer/consumer ve dış sistemlerin semantiğine bağlıdır.</p>
+</section>
+
+<section class="page">
+  <h2>8. Flink ve ksqlDB: ayrıntılı karşılaştırma</h2>
+
+  <table>
+    <thead><tr><th>Boyut</th><th>Apache Flink</th><th>ksqlDB</th></tr></thead>
+    <tbody>
+      <tr><td>Programlama modeli</td><td>DataStream/Table/SQL API; Java/Python/SQL ile düşük seviyeye inilebilir</td><td>Öncelikle SQL; engine Kafka Streams topolojisi üretir</td></tr>
+      <tr><td>Doğal kapsam</td><td>Kafka dahil çoklu source/sink ve genel amaçlı dağıtık stream/batch motoru</td><td>Kafka topic’leri çevresinde Kafka-native stream processing</td></tr>
+      <tr><td>Özel iş mantığı</td><td>ProcessFunction, timer, state, async I/O, side output, CEP gibi güçlü API’ler</td><td>SQL ve UDF/UDAF/UDTF sınırları; arbitrary processor mantığı daha sınırlı</td></tr>
+      <tr><td>State kontrolü</td><td>Value/List/Map/Reducing/Aggregating/Broadcast state, TTL ve backend seçimi</td><td>Aggregation/join/materialized TABLE state’i engine tarafından yönetilir</td></tr>
+      <tr><td>Event time</td><td>Timestamp assigner, explicit watermark generator, idleness, timer ve allowed lateness</td><td>Kafka record timestamp veya seçilen alan; window/grace ve stream-time semantiği</td></tr>
+      <tr><td>Geç veri</td><td>Late firing ve typed side output ile özel audit/replay yolu</td><td>Grace sonrası kayıt ilgili window işlemi için atılır; özel yönlendirme daha az doğrudan</td></tr>
+      <tr><td>Dinamik kurallar</td><td>Broadcast state ile bütün subtasks’a kontrol stream’i yaymak doğal</td><td>Rule TABLE + stream-table join mümkün; equality key ve join semantiğine uymalı</td></tr>
+      <tr><td>Dedup</td><td>Keyed state + TTL ile tam özel davranış</td><td>Window/table aggregation ile modellenebilir; “ilkini geçir, tekrarları ayrı topic’e çıkar” daha dolaylı</td></tr>
+      <tr><td>Yan çıktılar</td><td>Tek operator’den birden çok typed side output</td><td>Genellikle her çıktı için ayrı persistent query/topic</td></tr>
+      <tr><td>Exactly-once</td><td>Checkpoint ile state/offset ve transactional sink koordinasyonu</td><td><code>exactly_once_v2</code> ile Kafka Streams transaction semantiği; varsayılan at-least-once</td></tr>
+      <tr><td>State recovery</td><td>Checkpoint, externalized checkpoint, savepoint, stable operator UID</td><td>Kafka Streams changelog/internal topic recovery; query metadata config topic’inde</td></tr>
+      <tr><td>Sorgulanabilir sonuç</td><td>Genellikle harici serving sink gerekir</td><td>Materialized view üzerinde pull query önemli avantajdır</td></tr>
+      <tr><td>Operasyon</td><td>JobManager/TaskManager, slot, checkpoint, savepoint, Flink UI</td><td>ksqlDB server cluster, REST/CLI/Control Center, query status ve Kafka internal topic’leri</td></tr>
+      <tr><td>Geliştirme hızı</td><td>Daha çok kod ve test; daha fazla kontrol</td><td>SQL’e uygun problemde çok hızlı ve az kod</td></tr>
+      <tr><td>Öğrenme eğrisi</td><td>Distributed state, watermark, serialization ve recovery bilgisi gerekir</td><td>SQL erişilebilir; Kafka key, partition, stream/table ve changelog semantiği yine şarttır</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="page">
+  <h2>9. Bu proje ksqlDB ile nasıl görünürdü?</h2>
+
+  <p>Aşağıdaki SQL bir üretim çözümü değil, yaklaşımı göstermek için sadeleştirilmiş taslaktır. Alan adları ve format ayarları gerçek schema contract’ına göre uyarlanmalıdır.</p>
+
+  <h3>Transaction stream’ini kaydetme</h3>
+  <pre>CREATE STREAM BANK_TRANSACTIONS (
+  TRANSACTION_ID STRING,
+  ACCOUNT_ID STRING,
+  AMOUNT_MINOR BIGINT,
+  CURRENCY STRING,
+  COUNTRY STRING,
+  CHANNEL STRING,
+  STATUS STRING,
+  EVENT_TIME_EPOCH_MILLIS BIGINT
+) WITH (
+  KAFKA_TOPIC='bank-transactions',
+  VALUE_FORMAT='JSON',
+  TIMESTAMP='EVENT_TIME_EPOCH_MILLIS'
+);</pre>
+
+  <h3>Valid event akışı</h3>
+  <pre>CREATE STREAM VALID_TRANSACTIONS AS
+SELECT *
+FROM BANK_TRANSACTIONS
+WHERE TRANSACTION_ID IS NOT NULL
+  AND ACCOUNT_ID IS NOT NULL
+  AND AMOUNT_MINOR &gt; 0
+  AND CURRENCY IN ('TRY', 'USD', 'EUR', 'GBP')
+EMIT CHANGES;</pre>
+
+  <h3>Bir dakikalık risk materialization</h3>
+  <pre>CREATE TABLE ACCOUNT_RISK_1M AS
+SELECT
+  ACCOUNT_ID,
+  COUNT(*) AS TRANSACTION_COUNT,
+  SUM(CASE WHEN STATUS = 'DECLINED' THEN 1 ELSE 0 END) AS DECLINED_COUNT,
+  SUM(AMOUNT_MINOR) AS TOTAL_AMOUNT_MINOR,
+  MAX(AMOUNT_MINOR) AS MAX_AMOUNT_MINOR
+FROM VALID_TRANSACTIONS
+WINDOW TUMBLING (SIZE 1 MINUTE, GRACE PERIOD 30 SECONDS)
+GROUP BY ACCOUNT_ID
+EMIT CHANGES;</pre>
+
+  <h3>60 saniyelik velocity</h3>
+  <pre>CREATE TABLE ACCOUNT_VELOCITY_60S AS
+SELECT ACCOUNT_ID, COUNT(*) AS TX_COUNT, SUM(AMOUNT_MINOR) AS TOTAL_AMOUNT
+FROM VALID_TRANSACTIONS
+WINDOW HOPPING (SIZE 60 SECONDS, ADVANCE BY 10 SECONDS,
+                GRACE PERIOD 30 SECONDS)
+GROUP BY ACCOUNT_ID
+HAVING COUNT(*) &gt;= 5
+EMIT CHANGES;</pre>
+
+  <p>Bu sorgular, window aggregation tarafında ksqlDB’nin ne kadar kısa ve okunabilir olabileceğini gösterir. Buna karşılık mevcut Flink çözümündeki typed invalid raw payload, 24 saatlik “ilk event’i geçir” dedup state’i, rule factory/strategy ve late side output için ek query/topology tasarımı gerekir.</p>
+</section>
+
+<section class="page">
+  <h2>10. Proje özelliklerini ksqlDB’ye eşleme</h2>
+
+  <table>
+    <thead><tr><th>Mevcut Flink özelliği</th><th>ksqlDB’de olası karşılık</th><th>Değerlendirme</th></tr></thead>
+    <tbody>
+      <tr><td>JSON parse + validator + raw DLQ</td><td>Schema + WHERE query; deserialization error policy/logging; ayrı invalid query</td><td>Basit validation kolay, ham parse hatasını zengin DLQ kaydına dönüştürmek daha özel çalışma ister</td></tr>
+      <tr><td>24h keyed ValueState dedup</td><td>Windowed TABLE/aggregation veya Kafka Streams custom katmanı</td><td>SQL ile yaklaşık model mümkün; mevcut “duplicate audit event” semantiği Flink’te daha doğrudan</td></tr>
+      <tr><td>Broadcast rule state</td><td>RULES TABLE + keyed stream-table join</td><td>Rule eşitlik key’iyle join edilebiliyorsa iyi; her event’e bütün heterojen rule’ları uygulamak daha zor</td></tr>
+      <tr><td>HIGH_AMOUNT strategy</td><td>Rule TABLE ile join + <code>WHERE amount &gt;= threshold</code></td><td>Global/account-segment key tasarımı gerekir; SQL’e uygundur</td></tr>
+      <tr><td>COUNTRY_MISMATCH strategy</td><td>Profile/rule TABLE join + eşitsizlik filtresi</td><td>Account/profile keyed ise doğal kullanım</td></tr>
+      <tr><td>Tumbling risk window</td><td>TUMBLING window + GROUP BY</td><td>ksqlDB için çok güçlü ve kısa kullanım</td></tr>
+      <tr><td>Sliding velocity window</td><td>HOPPING window + HAVING</td><td>ksqlDB için çok uygun</td></tr>
+      <tr><td>Late side output</td><td>Grace period; grace sonrası drop/metric/log</td><td>Flink’in typed replay topic’i daha kontrollü</td></tr>
+      <tr><td>Kafka exactly-once sink</td><td><code>exactly_once_v2</code></td><td>İki sistem de Kafka transaction’larından yararlanır; konfigürasyon/operasyon modeli farklıdır</td></tr>
+      <tr><td>Savepoint ile kod upgrade’i</td><td>Persistent query lifecycle ve internal topic/state recovery</td><td>Birebir aynı kavram değildir; migration yöntemi query/schema değişimine göre tasarlanır</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Dinamik rule join’inde kritik semantik</h3>
+  <p>ksqlDB stream-table join’de yeni stream kaydı geldiğinde table’ın o anki değeriyle lookup yapılır. Table tarafındaki sonraki update, geçmiş stream kayıtlarını otomatik olarak yeniden değerlendirmez. Bu projedeki Flink davranışı da geçmiş event’leri yeniden yürütmüyor; ancak broadcast state ve özel evaluator, farklı rule türleri ve state erişimi üzerinde daha fazla kontrol sağlıyor.</p>
+
+  <div class="warning"><strong>Temporal rule ihtiyacı:</strong> Mevcut Flink uygulaması da yalnız en yeni rule version’ını saklar. Geç event’in olay zamanında geçerli eski rule version’ıyla değerlendirilmesi gerekiyorsa her iki teknolojide de versioned/temporal rule tasarımı gerekir.</div>
+</section>
+
+<section class="page">
+  <h2>11. Hangi durumda hangisini seçmeliyiz?</h2>
+
+  <div class="verdict">
+    <div class="choose-flink">
+      <h3>Flink’i seç</h3>
+      <ul>
+        <li>Özel state machine, timer veya CEP gerekiyorsa</li>
+        <li>Watermark ve geç veri yönlendirmesinde ayrıntılı kontrol gerekiyorsa</li>
+        <li>Kafka dışında CDC, object storage, database veya başka source/sink’ler varsa</li>
+        <li>Dinamik kural motoru, async enrichment veya özel retry semantiği varsa</li>
+        <li>Büyük state ve uzun yaşayan karmaşık job’lar yönetilecekse</li>
+      </ul>
+    </div>
+    <div class="choose-ksql">
+      <h3>ksqlDB’yi seç</h3>
+      <ul>
+        <li>Veri Kafka’da ve sonuç yine Kafka’ya gidecekse</li>
+        <li>İş mantığı SELECT/FILTER/JOIN/GROUP BY/WINDOW ile doğal ifade ediliyorsa</li>
+        <li>SQL bilen ekip hızlı teslim yapmak istiyorsa</li>
+        <li>Materialized view’a pull query ihtiyacı varsa</li>
+        <li>Özel operator state/timer yerine engine-managed state yeterliyse</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Bu proje için karar</h3>
+  <p><strong>Öğrenme ve ileri seviye fraud motoru hedefi açısından Flink doğru seçimdir.</strong> Çünkü projenin öğretmek istediği ana konular keyed state, broadcast state, watermark, allowed lateness, typed side output, checkpoint ve stateful recovery’dir. Bunlar Flink’in programlanabilir çekirdeğini doğrudan gösterir.</p>
+
+  <p>Buna karşılık yalnızca “bir dakikadaki toplam tutarı ve işlem sayısını Kafka topic’ine yaz” ihtiyacı olsaydı ksqlDB daha ekonomik çözüm olurdu. Java JAR, custom accumulator ve window function yazmadan kısa SQL ile aynı aggregate üretilebilirdi.</p>
+
+  <h3>Hibrit yaklaşım</h3>
+  <p>Teknolojiler birbirini dışlamak zorunda değildir:</p>
+  <ul>
+    <li>Flink karmaşık fraud kararlarını, dedup ve dynamic rule state’ini çalıştırabilir.</li>
+    <li>Flink sonuçları Kafka topic’lerine yazabilir.</li>
+    <li>ksqlDB alert topic’lerini SQL ile dashboard/operasyon görünümlerine dönüştürebilir.</li>
+    <li>ksqlDB materialized TABLE üzerinden düşük gecikmeli pull query sunabilir.</li>
+  </ul>
+
+  <div class="summary"><strong>Pratik karar cümlesi:</strong> “SQL ile doğal ve tamamen Kafka-merkezli ise önce ksqlDB; özel state/time/control-flow gerekiyorsa Flink.”</div>
+</section>
+
+<section class="page">
+  <h2>12. Görüşme için kısa cevaplar</h2>
+
+  <h3>“Flink ile bu projede tam olarak ne yaptınız?”</h3>
+  <p>Kafka’dan banka işlemleri ve dinamik kurallar okuyan stateful bir DataStream job’ı kurduk. Event timestamp’lerinden bounded-out-of-orderness watermark ürettik; transaction ID bazlı TTL’li keyed state ile dedup yaptık; rule topic’ini broadcast state’e alıp account-keyed event’lerle bağladık. Bir dakikalık tumbling risk özeti ve 60/10 saniyelik sliding velocity detector oluşturduk. Invalid, duplicate, rule alert ve late kayıtları typed side output’lara ayırdık. Kafka output’larını checkpoint ile koordineli exactly-once transaction’lara yazdık.</p>
+
+  <h3>“Neden ksqlDB değil?”</h3>
+  <p>ksqlDB window aggregation ve basit join’lerde daha az kod isterdi. Ancak özel TTL’li dedup, heterojen rule stratejileri, broadcast state, typed side output ve watermark/idleness kontrolü bu projenin ana hedefiydi. Bu nedenle Flink daha uygun ve öğretici oldu.</p>
+
+  <h3>“Exactly-once gerçekten her kod satırı bir kez mi çalışıyor?”</h3>
+  <p>Hayır. Failure sonrası event replay edilip kod yeniden çalışabilir. Exactly-once; state snapshot’ı, source offset’i ve destekleyen transactional/idempotent sink’in gözlemlenebilir sonucunun tutarlı olmasını ifade eder.</p>
+
+  <h3>“Watermark neden gerekli?”</h3>
+  <p>Unbounded stream’de event-time penceresinin tamamlandığına karar verecek doğal bir “son kayıt” yoktur. Watermark, sistemin hangi olay zamanına kadar büyük ölçüde tamamlandığı iddiasıdır; latency ile completeness arasındaki iş kararını kodlar.</p>
+
+  <h3>“Canlı testte ne öğrendiniz?”</h3>
+  <p>Çok-input’lu operator’de tek bir no-watermark control stream’inin bütün downstream window’ları bloke edebileceğini gördük. Transaction watermark ilerlerken rule input <code>Long.MIN_VALUE</code> kaldı. Bu, idleness’in yalnız Kafka partition’larında değil, bağlı control stream’lerinde de düşünülmesi gerektiğini gösterdi.</p>
+</section>
+
+<section>
+  <h2>Kaynaklar ve proje dosyaları</h2>
+
+  <h3>Proje içi kaynaklar</h3>
+  <ul class="refs">
+    <li><code>src/main/java/com/bankstream/fraud/application/FraudDetectionJob.java</code> — job graph, windows, checkpoint ve sink bağlantıları</li>
+    <li><code>src/main/java/com/bankstream/fraud/config/AppConfig.java</code> — Kafka, watermark, lateness ve velocity ayarları</li>
+    <li><code>src/main/java/com/bankstream/fraud/operator/</code> — parse, validation, dedup, rule evaluation ve aggregation operator’leri</li>
+    <li><code>src/main/java/com/bankstream/fraud/infrastructure/kafka/</code> — Kafka source ve exactly-once sink factory’leri</li>
+    <li><code>compose.yaml</code> — Redpanda, Flink cluster, topic-init ve yardımcı servisler</li>
+    <li><code>docs/FLINK_EDGE_CASES.md</code> — edge-case ve görüşme notları</li>
+  </ul>
+
+  <h3>Resmî teknik kaynaklar</h3>
+  <ul class="refs small">
+    <li>Apache Flink 1.20 — Stateful Stream Processing:<br><a href="https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/concepts/stateful-stream-processing/">https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/concepts/stateful-stream-processing/</a></li>
+    <li>Apache Flink 1.20 — Streaming Analytics, event time ve late data:<br><a href="https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/learn-flink/streaming_analytics/">https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/learn-flink/streaming_analytics/</a></li>
+    <li>Apache Flink — Kafka connector ve delivery guarantees:<br><a href="https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/connectors/datastream/kafka/">https://nightlies.apache.org/flink/flink-docs-release-1.20/docs/connectors/datastream/kafka/</a></li>
+    <li>Confluent — ksqlDB Architecture:<br><a href="https://docs.confluent.io/platform/current/ksqldb/operate-and-deploy/how-it-works.html">https://docs.confluent.io/platform/current/ksqldb/operate-and-deploy/how-it-works.html</a></li>
+    <li>Confluent — ksqlDB Persistent, Push ve Pull Queries:<br><a href="https://docs.confluent.io/platform/current/ksqldb/concepts/queries.html">https://docs.confluent.io/platform/current/ksqldb/concepts/queries.html</a></li>
+    <li>Confluent — Time and Windows in ksqlDB:<br><a href="https://docs.confluent.io/platform/current/ksqldb/concepts/time-and-windows-in-ksqldb-queries.html">https://docs.confluent.io/platform/current/ksqldb/concepts/time-and-windows-in-ksqldb-queries.html</a></li>
+    <li>Confluent — ksqlDB Processing Guarantees:<br><a href="https://docs.confluent.io/platform/current/ksqldb/operate-and-deploy/processing-guarantees.html">https://docs.confluent.io/platform/current/ksqldb/operate-and-deploy/processing-guarantees.html</a></li>
+  </ul>
+
+  <div class="footer-note">Bu rapor proje kaynak kodu, çalışan Flink UI/REST gözlemleri ve resmî ürün dokümantasyonu kullanılarak hazırlanmıştır. Ürün özellikleri ve sürüm uyumlulukları zaman içinde değişebilir; üretim kararı öncesinde hedef sürümlerin güncel dokümantasyonu doğrulanmalıdır.</div>
+</section>
+
+</body>
+</html>
